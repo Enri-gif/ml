@@ -241,8 +241,8 @@
                 tfvis.visor().open();
                 const stessDetectionDataset = tf.data.csv("stress_detection_data.csv");
                 const pointsDataset = stessDetectionDataset.map((record) => ({
-                    x: record.Stress_Detection,
-                    y: record.Cholesterol_Level,
+                    x: record.Cholesterol_Level,
+                    y: record.Stress_Detection,
                 }));
                 points = await pointsDataset.toArray();
                 if (points.length % 2 !== 0) {
@@ -293,7 +293,7 @@
                         const outputValue = outputTensor.dataSync()[0];
                         document.getElementById("prediction-output").innerHTML =
                             `the predicted stress level is <br/>` +
-                            `<span style="font-size: 2em">\$${(outputValue / 1000).toFixed(0) * 1000}</span>`;
+                            `<span style="font-size: 2em">${outputValue.toFixed(0)}</span>`;
                     });
                 }
             }
