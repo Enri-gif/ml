@@ -107,7 +107,7 @@
                             </h3>
                             <h5 class="center">Predict</h5>
                             <label
-                                >Square feet of living space:
+                                >Cholestorol level:
                                 <input type="number" id="prediction-input" placeholder="2000" />
                             </label>
                             <button
@@ -117,7 +117,7 @@
                                 disabled
                                 onclick="predict()"
                             >
-                                Predict house price
+                                Predict stress level
                             </button>
                             <p><strong id="prediction-output"></strong></p>
                         </div>
@@ -145,9 +145,9 @@
                     series.push("predicted");
                 }
                 tfvis.render.scatterplot(
-                    { name: `${featureName} vs House Price` },
+                    { name: `${featureName} vs Stress level` },
                     { values, series },
-                    { xLabel: featureName, yLabel: "Price" },
+                    { xLabel: featureName, yLabel: "stress level" },
                 );
             }
             async function plotPredictionLine() {
@@ -168,7 +168,7 @@
                 const predictedPoints = Array.from(xs).map((val, i) => {
                     return { x: val, y: ys[i] };
                 });
-                await plot(points, "Square feet", predictedPoints);
+                await plot(points, "Cholestorol", predictedPoints);
             }
             async function plotParams(weight, params) {
                 model.getLayer(null, 0).setWeights([tf.tensor2d([[weight]]), tf.tensor1d([bias])]);
@@ -239,17 +239,17 @@
 
             async function run() {
                 tfvis.visor().open();
-                const houseSalesDataset = tf.data.csv("kc_house_data.csv");
-                const pointsDataset = houseSalesDataset.map((record) => ({
-                    x: record.sqft_living,
-                    y: record.price,
+                const stessDetectionDataset = tf.data.csv("stress_detection_data.csv");
+                const pointsDataset = stessDetectionDataset.map((record) => ({
+                    x: record.Stress_Detection,
+                    y: record.Cholesterol_Level,
                 }));
                 points = await pointsDataset.toArray();
                 if (points.length % 2 !== 0) {
                     points.pop();
                 }
                 tf.util.shuffle(points);
-                await plot(points, "Square feet");
+                await plot(points, "Cholestorol level");
 
                 const featureValues = points.map((p) => p.x);
                 const featureTensor = tf.tensor2d(featureValues, [featureValues.length, 1]);
@@ -292,7 +292,7 @@
                         );
                         const outputValue = outputTensor.dataSync()[0];
                         document.getElementById("prediction-output").innerHTML =
-                            `the predicted house price is <br/>` +
+                            `the predicted stress level is <br/>` +
                             `<span style="font-size: 2em">\$${(outputValue / 1000).toFixed(0) * 1000}</span>`;
                     });
                 }
