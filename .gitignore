@@ -22,7 +22,6 @@ checkpoints/
 # *.json   ← vær forsigtig med denne, da package.json også matches
 
 # Store datafiler
-*.csv
 *.parquet
 *.npy
 *.npz
