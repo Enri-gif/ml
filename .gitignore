@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+bower_components/
+
+# Python virtual environments
+venv/
+env/
+.env/
+__pycache__/
+*.pyc
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# TensorFlow / ML
+*.h5
+*.pkl
+saved_model/
+checkpoints/
+
+# JSON data-filer (hvis du ikke vil have dem med)
+# *.json   ← vær forsigtig med denne, da package.json også matches
+
+# Store datafiler
+*.csv
+*.parquet
+*.npy
+*.npz
