@@ -54,31 +54,37 @@ async function run() {
 
     const concreteDataset = tf.data.csv(csvUrl);
 
-    const pointsDataset = concreteDataset.map(record => ({
-        age: record.age,
-        strength: record.strength
-    }));
+    const pointsDataset = concreteDataset.map(record => record);
     points = await pointsDataset.toArray();
 
-    const featureValues = points.map(p => [p.age]);
-
+    const featureValues = points.map(p => [
+        p.cement,
+        p.slag,
+        p.ash,
+        p.water,
+        p.superplastic,
+        p.coarseagg,
+        p.fineagg,
+        p.age,
+        p.water_cement_ratio,
+        p.total_binder,
+        p.aggregate_to_cement,
+        p.cement_water_interaction,
+        p.age_strength_proxy
+    ]);
     const labelValues = points.map(p => p.strength);
 
+    // [ N samples, 13 features ]
     const featureTensor = tf.tensor2d(featureValues);
     const labelTensor = tf.tensor2d(labelValues, [labelValues.length, 1]);
 
-    // Use numbers for min/max
-    const featureMin = (await featureTensor.min().data())[0];
-    const featureMax = (await featureTensor.max().data())[0];
+    const featureMin = featureTensor.min(0);
+    const featureMax = featureTensor.max(0);
 
     const labelMin = (await labelTensor.min().data())[0];
     const labelMax = (await labelTensor.max().data())[0];
 
-    normalisedFeature = normalise(
-        featureTensor,
-        tf.scalar(featureMin),
-        tf.scalar(featureMax)
-    );
+    normalisedFeature = normalise(featureTensor, featureMin, featureMax);
 
     normalisedLabel = normalise(
         labelTensor,
@@ -93,10 +99,10 @@ async function run() {
     const trainSize = Math.floor(numExamples * 0.8);
     const testSize = numExamples - trainSize;
 
-    trainingFeatures = normalisedFeature.tensor.slice([0, 0], [trainSize, 1]);
-    testingFeatures = normalisedFeature.tensor.slice([trainSize, 0], [testSize, 1]);
-    trainingLabels = normalisedLabel.tensor.slice([0, 0], [trainSize, 1]);
-    testingLabels = normalisedLabel.tensor.slice([trainSize, 0], [testSize, 1]);
+    trainingFeatures = normalisedFeature.tensor.slice([0, 0], [trainSize]);
+    testingFeatures = normalisedFeature.tensor.slice([trainSize, 0], [testSize]);
+    trainingLabels = normalisedLabel.tensor.slice([0, 0], [trainSize]);
+    testingLabels = normalisedLabel.tensor.slice([trainSize, 0], [testSize]);
 
     return { trainingFeatures, trainingLabels };
 }
@@ -141,17 +147,34 @@ async function plot(pointsArray, featureName, classKey, size = 400, equalizeClas
 }
 
 async function plotPredictionLine() {
-    const min = normalisedFeature.min;
-    const max = normalisedFeature.max;
+    const featureMin = normalisedFeature.min;
+    const featureMax = normalisedFeature.max;
 
-    const minVal = normalisedFeature.min.dataSync()[0];
-    const maxVal = normalisedFeature.max.dataSync()[0];
+    const featureIndex = 11;
 
-    const xsTensor = tf.linspace(minVal, maxVal, 100).reshape([100, 1]);
+    const base = [
+        141.3, 212.0, 0.0, 203.5, 0.0,
+        971.8, 748.5,
+        28,
+        1.44, 353.3, 12.17,
+        0,
+        5.29
+    ];
 
-    const normalisedXs = normalise(xsTensor, min, max);
+    const xsArray = [];
 
-    const preds = model.predict(normalisedXs.tensor);
+    for (let i = 0; i <= 100000; i += 1) {
+        const row = [...base];
+        row[featureIndex] = i;
+        xsArray.push(row);
+    }
+
+    const xsTensor = tf.tensor2d(xsArray);
+
+    // ---- normalize input
+    const normXs = normalise(xsTensor, featureMin, featureMax);
+
+    const preds = model.predict(normXs.tensor);
 
     const ysTensor = denormalise(
         preds,
@@ -159,46 +182,37 @@ async function plotPredictionLine() {
         normalisedLabel.max
     );
 
-    const xs = await xsTensor.data();
-    const ys = await ysTensor.data();
+    const xsData = xsTensor.arraySync();
+    const ysData = await ysTensor.data();
 
-    console.log("XS sample:", xs.slice(0, 10));
-    console.log("YS sample:", ys.slice(0, 10));
-
-    // 🔥 HARD FILTER invalid values
     const predictedPoints = [];
 
-    for (let i = 0; i < xs.length; i++) {
-        const x = xs[i];
-        const y = ys[i];
-
-        if (
-            Number.isFinite(x) &&
-            Number.isFinite(y)
-        ) {
-            predictedPoints.push({ x, y });
-        }
+    for (let i = 0; i < xsData.length; i++) {
+        predictedPoints.push({
+            x: xsData[i][featureIndex],
+            y: ysData[i]
+        });
     }
 
-    console.log("Valid points:", predictedPoints.length);
-
     tfvis.render.scatterplot(
-        { name: "Age vs Concrete Strength" },
+        { name: "cement_water_interaction vs Concrete Strength (fixed mix)" },
         {
             values: [
                 points.map(p => ({
-                    x: p.age,
+                    x: p.cement_water_interaction,
                     y: p.strength
                 })),
                 predictedPoints
             ],
-            series: ["data", "prediction"]
+            series: ["real data", "prediction"]
         },
         {
-            xLabel: "age",
-            yLabel: "Concrete Strength"
+            xLabel: "cement_water_interaction",
+            yLabel: "strength"
         }
     );
+
+    tf.dispose([xsTensor, normXs.tensor, preds, ysTensor]);
 }
 
 function createModel() {
@@ -207,7 +221,7 @@ function createModel() {
     model.add(tf.layers.dense({
         units: 16,
         activation: 'relu',
-        inputShape: [1]
+        inputShape: [13]
     }));
 
     model.add(tf.layers.dense({
@@ -294,37 +308,60 @@ async function saveModel() { await model.save('localstorage://my-model-1'); }
 async function loadModel() { model = await tf.loadLayersModel('localstorage://my-model-1'); }
 
 async function predict() {
-    const predictionInputOne = parseFloat(
+    const inputValue = parseFloat(
         document.getElementById("prediction-input-1").value
     );
 
-    if (isNaN(predictionInputOne)) {
+    if (isNaN(inputValue)) {
         alert("Please enter a valid number");
         return;
     }
 
-    const outputValue = tf.tidy(() => {
-        const inputTensor = tf.tensor2d([[predictionInputOne]]);
+    const featureIndex = 11;
 
-        const normalisedInput = normalise(
-            inputTensor,
-            normalisedFeature.min,
-            normalisedFeature.max
-        );
+    // ---- IMPORTANT: use RAW dataset mean, not normalized
+    const rawFeatures = points.map(p => [
+        p.cement,
+        p.slag,
+        p.ash,
+        p.water,
+        p.superplastic,
+        p.coarseagg,
+        p.fineagg,
+        p.age,
+        p.water_cement_ratio,
+        p.total_binder,
+        p.aggregate_to_cement,
+        p.cement_water_interaction,
+        p.age_strength_proxy
+    ]);
 
-        const prediction = model.predict(normalisedInput.tensor);
+    const base = tf.tensor2d(rawFeatures).mean(0).arraySync();
 
-        const outputTensor = denormalise(
-            prediction,
-            normalisedLabel.min,
-            normalisedLabel.max
-        );
+    base[featureIndex] = inputValue;
 
-        return outputTensor.dataSync()[0];
-    });
+    const inputTensor = tf.tensor2d([base]);
+
+    const normInput = normalise(
+        inputTensor,
+        normalisedFeature.min,
+        normalisedFeature.max
+    );
+
+    const prediction = model.predict(normInput.tensor);
+
+    const outputTensor = denormalise(
+        prediction,
+        normalisedLabel.min,
+        normalisedLabel.max
+    );
+
+    const result = (await outputTensor.data())[0];
 
     document.getElementById("prediction-output").innerHTML =
-        `Predicted concrete strength: ${outputValue.toFixed(2)} MPa`;
+        `Predicted concrete strength: ${result.toFixed(2)} MPa`;
+
+    tf.dispose([inputTensor, normInput.tensor, prediction, outputTensor]);
 }
 
 trainButton.addEventListener("click", async () => {
