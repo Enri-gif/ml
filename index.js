@@ -57,24 +57,9 @@ async function run() {
     const pointsDataset = concreteDataset.map(record => record);
     points = await pointsDataset.toArray();
 
-    const featureValues = points.map(p => [
-        p.cement,
-        p.slag,
-        p.ash,
-        p.water,
-        p.superplastic,
-        p.coarseagg,
-        p.fineagg,
-        p.age,
-        p.water_cement_ratio,
-        p.total_binder,
-        p.aggregate_to_cement,
-        p.cement_water_interaction,
-        p.age_strength_proxy
-    ]);
+    const featureValues = points.map(p => [p.age]);
     const labelValues = points.map(p => p.strength);
 
-    // [ N samples, 13 features ]
     const featureTensor = tf.tensor2d(featureValues);
     const labelTensor = tf.tensor2d(labelValues, [labelValues.length, 1]);
 
@@ -150,66 +135,35 @@ async function plotPredictionLine() {
     const featureMin = normalisedFeature.min;
     const featureMax = normalisedFeature.max;
 
-    const featureIndex = 11;
-
-    const base = [
-        141.3, 212.0, 0.0, 203.5, 0.0,
-        971.8, 748.5,
-        28,
-        1.44, 353.3, 12.17,
-        0,
-        5.29
-    ];
-
     const xsArray = [];
-
-    for (let i = 0; i <= 100000; i += 1) {
-        const row = [...base];
-        row[featureIndex] = i;
-        xsArray.push(row);
+    for (let i = 0; i <= 300; i++) {
+        xsArray.push([i * 0.01]);
     }
 
     const xsTensor = tf.tensor2d(xsArray);
-
-    // ---- normalize input
     const normXs = normalise(xsTensor, featureMin, featureMax);
-
     const preds = model.predict(normXs.tensor);
 
-    const ysTensor = denormalise(
-        preds,
-        normalisedLabel.min,
-        normalisedLabel.max
-    );
+    const ysTensor = denormalise(preds, normalisedLabel.min, normalisedLabel.max);
 
     const xsData = xsTensor.arraySync();
     const ysData = await ysTensor.data();
 
     const predictedPoints = [];
-
     for (let i = 0; i < xsData.length; i++) {
-        predictedPoints.push({
-            x: xsData[i][featureIndex],
-            y: ysData[i]
-        });
+        predictedPoints.push({ x: xsData[i][0], y: ysData[i] });
     }
 
     tfvis.render.scatterplot(
-        { name: "cement_water_interaction vs Concrete Strength (fixed mix)" },
+        { name: "age vs Concrete Strength" },
         {
             values: [
-                points.map(p => ({
-                    x: p.cement_water_interaction,
-                    y: p.strength
-                })),
+                points.map(p => ({ x: p.age, y: p.strength })),
                 predictedPoints
             ],
             series: ["real data", "prediction"]
         },
-        {
-            xLabel: "cement_water_interaction",
-            yLabel: "strength"
-        }
+        { xLabel: "age", yLabel: "strength" }
     );
 
     tf.dispose([xsTensor, normXs.tensor, preds, ysTensor]);
@@ -220,13 +174,13 @@ function createModel() {
 
     model.add(tf.layers.dense({
         units: 16,
-        activation: 'relu',
-        inputShape: [13]
+        activation: 'sigmoid',
+        inputShape: [1]
     }));
 
     model.add(tf.layers.dense({
         units: 16,
-        activation: 'relu'
+        activation: 'sigmoid'
     }));
 
     model.add(tf.layers.dense({
@@ -234,7 +188,7 @@ function createModel() {
     }));
 
     model.compile({
-        optimizer: tf.train.adam(0.01),
+        optimizer: tf.train.sgd(0.1),
         loss: 'meanSquaredError',
         metrics: ['mse']
     });
@@ -270,7 +224,7 @@ async function trainModel(trainingFeatures, trainingLabels) {
     const { onEpochEnd } = tfvis.show.fitCallbacks({ name: 'Training Performance' }, ['loss']);
 
     await model.fit(trainingFeatures, trainingLabels, {
-        epochs: 20,
+        epochs: 200,
         shuffle: true,
         callbacks: {
             onEpochBegin: async() => {
@@ -317,30 +271,7 @@ async function predict() {
         return;
     }
 
-    const featureIndex = 11;
-
-    // ---- IMPORTANT: use RAW dataset mean, not normalized
-    const rawFeatures = points.map(p => [
-        p.cement,
-        p.slag,
-        p.ash,
-        p.water,
-        p.superplastic,
-        p.coarseagg,
-        p.fineagg,
-        p.age,
-        p.water_cement_ratio,
-        p.total_binder,
-        p.aggregate_to_cement,
-        p.cement_water_interaction,
-        p.age_strength_proxy
-    ]);
-
-    const base = tf.tensor2d(rawFeatures).mean(0).arraySync();
-
-    base[featureIndex] = inputValue;
-
-    const inputTensor = tf.tensor2d([base]);
+    const inputTensor = tf.tensor2d([[inputValue]]);
 
     const normInput = normalise(
         inputTensor,
