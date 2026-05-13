@@ -135,9 +135,12 @@ async function plotPredictionLine() {
     const featureMin = normalisedFeature.min;
     const featureMax = normalisedFeature.max;
 
+    const featureMinVal = (await featureMin.data())[0];
+    const featureMaxVal = (await featureMax.data())[0];
+
     const xsArray = [];
     for (let i = 0; i <= 300; i++) {
-        xsArray.push([i * 0.01]);
+        xsArray.push([featureMinVal + (featureMaxVal - featureMinVal) * i / 300]);
     }
 
     const xsTensor = tf.tensor2d(xsArray);
