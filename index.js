@@ -57,7 +57,7 @@ async function run() {
     const pointsDataset = concreteDataset.map(record => record);
     points = await pointsDataset.toArray();
 
-    const featureValues = points.map(p => [p.age]);
+    const featureValues = points.map(p => [p.water_cement_ratio]);
     const labelValues = points.map(p => p.strength);
 
     const featureTensor = tf.tensor2d(featureValues);
@@ -158,15 +158,15 @@ async function plotPredictionLine() {
     }
 
     tfvis.render.scatterplot(
-        { name: "age vs Concrete Strength" },
+        { name: "water_cement_ratio vs Concrete Strength" },
         {
             values: [
-                points.map(p => ({ x: p.age, y: p.strength })),
+                points.map(p => ({ x: p.water_cement_ratio, y: p.strength })),
                 predictedPoints
             ],
             series: ["real data", "prediction"]
         },
-        { xLabel: "age", yLabel: "strength" }
+        { xLabel: "water_cement_ratio", yLabel: "strength" }
     );
 
     tf.dispose([xsTensor, normXs.tensor, preds, ysTensor]);
@@ -191,7 +191,7 @@ function createModel() {
     }));
 
     model.compile({
-        optimizer: tf.train.sgd(0.1),
+        optimizer: tf.train.adam(0.1),
         loss: 'meanSquaredError',
         metrics: ['mse']
     });
@@ -239,7 +239,7 @@ async function trainModel(trainingFeatures, trainingLabels) {
             onEpochEnd: async (epoch, logs) => {
                 await onEpochEnd(epoch, logs);
                 await plotPredictionLine();
-                // await plot(points, "age", "strength");
+                // await plot(points, "water_cement_ratio", "strength");
                 modelStatus.textContent = `Epoch ${epoch + 1}: loss = ${logs.loss.toFixed(8)}`;
             }
         }
@@ -261,8 +261,8 @@ async function testModel(testingFeatures, testingLabels) {
     return loss[0];
 }
 
-async function saveModel() { await model.save('localstorage://my-model-1'); }
-async function loadModel() { model = await tf.loadLayersModel('localstorage://my-model-1'); }
+async function saveModel() { await model.save('localstorwater_cement_ratio://my-model-1'); }
+async function loadModel() { model = await tf.loadLayersModel('localstorwater_cement_ratio://my-model-1'); }
 
 async function predict() {
     const inputValue = parseFloat(
